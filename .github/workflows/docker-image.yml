@@ -32,7 +32,10 @@ jobs:
 
       # 登录到Docker Hub (可选，如果需要推送镜像到Docker Hub)
       - name: Login to Docker Hub
-        if: github.event_name != 'pull_request' && ${{ secrets.DOCKER_HUB_USERNAME != '' && secrets.DOCKER_HUB_TOKEN != '' }}
+        if: github.event_name != 'pull_request' && env.DOCKER_HUB_USERNAME != '' && env.DOCKER_HUB_TOKEN != ''
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
@@ -43,9 +46,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ghcr.io/${{ github.repository }}
-            ${{ secrets.DOCKER_HUB_USERNAME != '' && format('{0}/m3u8-streaming-proxy', secrets.DOCKER_HUB_USERNAME) || '' }}
+          # 只使用GHCR镜像，简化配置
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=schedule
             type=ref,event=branch
@@ -58,11 +60,13 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:latest
+          cache-to: type=inline
+          provenance: false
 
       # 运行容器以测试镜像是否能正常启动 (可选)
       - name: Test Docker image
@@ -94,14 +98,15 @@ jobs:
           tags: |
             type=sha
 
-      # 使用Trivy扫描Docker镜像中的漏洞
+      # 运行安全扫描
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ fromJSON(steps.meta.outputs.tags)[0] }}
+          image-ref: ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version || 'latest' }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
+          exit-code: '1'
 
       # 上传Trivy扫描结果到GitHub安全选项卡
       - name: Upload Trivy scan results to GitHub Security tab
