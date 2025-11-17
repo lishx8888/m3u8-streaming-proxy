@@ -1,218 +1,3505 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Streaming Proxy Test</title>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      max-width: 1200px;
-      margin: 0 auto;
-      background: #f5f5f5;
-    }
-    h1 {
-      color: #333;
-      text-align: center;
-    }
-    .container {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    #video-container {
-      margin-top: 20px;
-      background: black;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    video {
-      width: 100%;
-      display: block;
-    }
-    .controls {
-      margin: 20px 0;
-    }
-    #url-input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 16px;
-      box-sizing: border-box;
-    }
-    button {
-      padding: 10px 20px;
-      background: #007BFF;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 16px;
-      margin-top: 10px;
-      width: 100%;
-    }
-    button:hover {
-      background: #0056b3;
-    }
-    #status {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 4px;
-      display: none;
-    }
-    .error {
-      background: #ffebee;
-      color: #c62828;
-      display: block;
-    }
-    .success {
-      background: #e8f5e9;
-      color: #2e7d32;
-      display: block;
-    }
-    .loading {
-      background: #e3f2fd;
-      color: #1565c0;
-      display: block;
-    }
-    footer {
-      margin-top: 20px;
-      text-align: center;
-      font-size: 14px;
-      color: #666;
-    }
-    footer a {
-      color: #007BFF;
-      text-decoration: none;
-    }
-    footer a:hover {
-      text-decoration: underline;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U8 流媒体播放器</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <!-- 性能优化标签 -->
+    <meta name="robots" content="index, follow">
+    <meta name="description" content="M3U8 流媒体播放器，支持在线播放M3U8格式的视频流">
+    <meta name="theme-color" content="#121212">
+    <!-- 预加载关键资源 -->
+    <link rel="preload" href="favicon.svg" as="image" type="image/svg+xml">
+    <!-- 提示浏览器优先执行渲染 -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <!-- 预加载关键样式，防止FOUC -->
+    <style media="all">
+        /* 最小化的关键样式，确保页面立即应用基本外观 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            visibility: hidden; /* 初始隐藏内容 */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* 样式加载完成后通过JS移除visibility: hidden */
+        .app-loaded {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+    <!-- 延迟加载非关键脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js" defer crossorigin="anonymous"></script>
+    <style media="all">
+        /* 全局变量定义 */
+        :root {
+            --primary-color: #4CAF50;
+            --primary-hover: #45a049;
+            --secondary-color: #2196F3;
+            --accent-color: #FF5722;
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #2c2c2c;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --border-color: #333;
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.4);
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --transition-fast: 0.2s ease;
+            --transition-normal: 0.3s ease;
+        }
+
+        /* 全局重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        /* 主容器 */
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 导航栏 */
+        .navbar {
+            background-color: var(--bg-secondary);
+            box-shadow: var(--shadow-md);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 64px;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background-color: var(--primary-color);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            padding: 10px 16px;
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            transition: var(--transition-fast);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+            color: var(--primary-color);
+        }
+
+        .nav-link.active {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--primary-color);
+        }
+
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        /* 主内容区域 */
+        .main-content {
+            flex: 1;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        /* 卡片样式 */
+        .card {
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            transition: var(--transition-normal);
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            background-color: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* 表单元素样式 */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            transition: var(--transition-fast);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        /* 按钮样式 */
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            min-width: 80px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-danger {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #d32f2f;
+        }
+
+        .btn-icon {
+            padding: 8px;
+            min-width: auto;
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* 布局组件 */
+        .grid {
+            display: grid;
+            gap: 24px;
+        }
+
+        .grid-cols-1 {
+            grid-template-columns: 1fr;
+        }
+
+        .grid-cols-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .grid-cols-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .flex {
+            display: flex;
+        }
+
+        .flex-col {
+            flex-direction: column;
+        }
+
+        .items-center {
+            align-items: center;
+        }
+
+        .justify-between {
+            justify-content: space-between;
+        }
+
+        .gap-4 {
+            gap: 16px;
+        }
+
+        .gap-6 {
+            gap: 24px;
+        }
+
+        /* 播放器组件 */
+        .player-section {
+            grid-column: 1 / -1;
+        }
+
+        .player-container {
+            position: relative;
+            background-color: #000;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+            min-height: 400px;
+        }
+
+        .player-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .player-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 20px;
+            opacity: 0;
+            transition: var(--transition-normal);
+        }
+
+        .player-container:hover .player-overlay {
+            opacity: 1;
+        }
+
+        .player-info {
+            margin-bottom: 16px;
+        }
+
+        .channel-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 4px;
+        }
+
+        .channel-subtitle {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .player-controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        /* 内容区域 */
+        .content-area {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 24px;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .sidebar-body {
+            padding: 16px;
+        }
+
+        /* 频道列表 */
+        .channel-search {
+            margin-bottom: 16px;
+        }
+
+        .channel-list {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0; /* 防止flex子元素溢出 */
+        }
+
+        .group-section {
+            margin-bottom: 16px;
+        }
+
+        .group-header {
+            padding: 10px 12px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 500;
+            transition: var(--transition-fast);
+        }
+
+        .group-header:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+
+        .group-toggle {
+            transition: transform 0.3s ease;
+        }
+
+        .group-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .group-content {
+            margin-top: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            transition: max-height 0.3s ease;
+        }
+
+        .group-content.collapsed {
+            max-height: 0;
+            overflow: hidden;
+            margin-top: 0;
+        }
+
+        .channel-item {
+            padding: 10px 12px 10px 24px;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            margin-bottom: 4px;
+            transition: var(--transition-fast);
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .channel-item:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+            border-left-color: var(--primary-color);
+        }
+
+        .channel-item.active {
+            background-color: rgba(76, 175, 80, 0.2);
+            border-left-color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .channel-icon {
+            width: 48px;
+            height: 48px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* 分组标签 */
+        .group-tags {
+            margin-bottom: 16px;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag {
+            padding: 6px 12px;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border-radius: 16px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            border: 1px solid transparent;
+        }
+
+        .tag:hover {
+            background-color: rgba(33, 150, 243, 0.1);
+            color: var(--secondary-color);
+        }
+
+        .tag.active {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+
+        /* 订阅管理区域 */
+        .playlist-manager {
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            height: 424px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .playlist-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            margin-top: 8px;
+            /* 确保滚动条始终可见 */
+            min-height: 0; /* 重要：防止flex子元素溢出 */
+        }
+
+        .playlist-card {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background-color: var(--bg-primary);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+
+        .playlist-card:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .playlist-info {
+            flex: 1;
+            min-width: 0;
+            margin-right: 8px;
+        }
+
+        .playlist-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .playlist-url {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .playlist-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .playlist-card {
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            transition: var(--transition-fast);
+            border: 1px solid var(--border-color);
+        }
+
+        .playlist-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 8px rgba(76, 175, 80, 0.1);
+        }
+
+        .playlist-name {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .playlist-url {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+
+        .playlist-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* 通知系统 */
+        .notification {
+            position: fixed;
+            top: 80px;
+            right: 24px;
+            max-width: 350px;
+            padding: 16px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            z-index: 1001;
+            transform: translateX(100%);
+            opacity: 0;
+            transition: var(--transition-normal);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .notification.error {
+            background-color: #f44336;
+        }
+
+        .notification.info {
+            background-color: var(--secondary-color);
+        }
+
+        /* 加载状态 */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loader {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        /* 模态框 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1002;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition-normal);
+        }
+
+        .modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9);
+            transition: var(--transition-normal);
+        }
+
+        .modal.show .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px;
+            transition: var(--transition-fast);
+        }
+
+        .close-button:hover {
+            color: var(--text-primary);
+        }
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .scale-in {
+            animation: scaleIn 0.3s ease-out;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1024px) {
+            .content-area {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+                margin-bottom: 24px;
+            }
+
+            .grid-cols-3 {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        /* IPTV布局特定样式 */
+        .grid-cols-4 {
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            gap: 16px;
+        }
+
+        .sidebar {
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            background-color: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-body {
+            padding: 16px;
+        }
+
+        .player-section {
+            width: 100%;
+        }
+
+        .mb-4 {
+            margin-bottom: 16px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            /* 在较大的平板设备上，调整布局 */
+            .grid-cols-4 {
+                grid-template-columns: 1fr 3fr;
+            }
+            
+            .grid-cols-3 {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            /* 让第三个卡片跨两列 */
+            .grid-cols-3 > .card:last-child {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .grid-cols-4 {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                max-height: 300px;
+                margin-bottom: 1rem;
+            }
+            
+            .player-section {
+                min-height: 300px;
+            }
+            
+            .grid-cols-3 {
+                grid-template-columns: 1fr;
+            }
+            
+            .grid-cols-3 > .card {
+                grid-column: span 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar-content {
+                padding: 0 16px;
+            }
+
+            .nav-links {
+                position: fixed;
+                top: 64px;
+                left: 0;
+                right: 0;
+                background-color: var(--bg-secondary);
+                flex-direction: column;
+                padding: 16px;
+                gap: 8px;
+                box-shadow: var(--shadow-md);
+                transform: translateY(-150%);
+                transition: var(--transition-normal);
+                z-index: 999;
+            }
+
+            .nav-links.show {
+                transform: translateY(0);
+            }
+
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .main-content {
+                padding: 16px;
+                gap: 16px;
+            }
+
+            .grid-cols-4,
+            .grid-cols-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            /* 确保三列布局为单列 */
+            .grid-cols-3 {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                max-height: 200px;
+                margin-bottom: 16px;
+            }
+            
+            .player-controls {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            
+            .time-display {
+                min-width: 40px;
+            }
+            
+            .progress-container {
+                flex: 1;
+                min-width: 120px;
+            }
+
+            .player-container {
+                min-height: 300px;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 20px;
+            }
+
+            .playlist-list {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                max-height: 400px;
+                margin-bottom: 16px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .navbar-content {
+                height: 56px;
+            }
+
+            .logo {
+                font-size: 1.2rem;
+            }
+
+            .main-content {
+                padding: 12px;
+            }
+
+            .card-body {
+                padding: 16px;
+            }
+
+            .player-container {
+                min-height: 250px;
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Streaming Proxy Test Player</h1>
-    
-    <div class="controls">
-      <input type="text" id="url-input" placeholder="Enter .m3u8 URL (e.g., https://example.com/playlist.m3u8)">
-      <button id="load-btn">Load Stream</button>
-      <div id="status"></div>
+    <!-- 应用容器 -->
+    <div class="app-container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="navbar-content">
+                <a href="#" class="logo">
+                    <span class="logo-icon">📺</span>
+                    M3U8 播放器
+                </a>
+                <div class="nav-links" id="navLinks">
+                    <a href="#" class="nav-link" data-section="settings" style="display: none;">设置</a>
+                </div>
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    ☰
+                </button>
+            </div>
+        </nav>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 首页区域 - IPTV风格布局 -->
+            <section id="homeSection" class="section active">
+                <!-- 主布局容器 -->
+                <div class="grid gap-4">
+                    <!-- 第一行：左侧频道列表，右侧播放区 -->
+                    <div class="grid grid-cols-4 gap-4">
+                        <!-- 左侧频道列表 - IPTV风格 -->
+                        <aside class="sidebar col-span-1">
+                            <div class="sidebar-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                                <h3 class="sidebar-title" style="display: inline-block; margin: 0;">频道列表</h3>
+                                <div class="channel-search" style="display: inline-block; width: auto; flex: 1; margin: 0; margin-left: 10px; max-width: 150px;">
+                                    <input type="text" id="channelSearch" class="form-control" placeholder="搜索..." style="height: 32px; font-size: 0.9rem;">
+                                </div>
+                            </div>
+                            <div class="sidebar-body">
+                                <!-- 分组标签 -->
+                                <div class="group-tags">
+                                    <div class="tags" id="groupTags">
+                                        <!-- 分组标签将在这里动态生成 -->
+                                    </div>
+                                </div>
+
+                                <!-- 频道列表 -->
+                                <div class="channel-list" id="channelList">
+                                    <!-- 频道分组和频道项将在这里动态生成 -->
+                                    <div class="empty-state">
+                                        <div class="empty-icon">📺</div>
+                                        <div class="empty-title">暂无频道</div>
+                                        <p>请先添加M3U订阅源</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <!-- 右侧播放区 -->
+                        <div class="col-span-3">
+                            <!-- 播放器区域 -->
+                            <div class="player-section card">
+                                <div class="card-body">
+                                    <div class="player-container">
+                                        <div class="player-wrapper">
+                                            <video id="videoPlayer"></video>
+                                        </div>
+                                        <div class="player-overlay">
+                                            <div class="player-info">
+                                                <div class="channel-logo-container">
+                                                    <img id="channelLogo" src="" alt="频道Logo" class="channel-logo">
+                                                </div>
+                                                <div class="channel-title" id="currentChannelTitle">请选择频道播放</div>
+                                            </div>
+                                            <div class="player-controls">
+                                                <button class="btn btn-secondary btn-icon play-pause-btn" id="playPauseBtn">
+                                                    ▶️
+                                                </button>
+                                                <button class="btn btn-secondary btn-icon" id="refreshBtn">
+                                                    🔄
+                                                </button>
+                                                <button class="btn btn-secondary btn-icon" id="saveBtn">
+                                                    💾
+                                                </button>
+                                                <button class="btn btn-secondary btn-icon" id="fullscreenBtn" title="全屏">
+                                                    ⛶
+                                                </button>
+                                                <div class="volume-control">
+                                                    <button class="btn btn-secondary btn-icon" id="volumeBtn" title="点击静音/取消静音">
+                                                        🔈
+                                                    </button>
+                                                    <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" class="volume-slider">
+                                                </div>
+                                                <div class="time-display current-time" id="currentTime">00:00</div>
+                                                <div class="progress-container" id="progressContainer">
+                                                    <div class="progress-bar" id="progressBar"></div>
+                                                    <div class="progress-handle" id="progressHandle"></div>
+                                                </div>
+                                                <div class="time-display total-time" id="totalTime">00:00</div>
+                                            </div>
+                                        <style>
+                                            .play-pause-btn {
+                                                min-width: 40px;
+                                            }
+                                            
+                                            .volume-control {
+                                                display: flex;
+                                                align-items: center;
+                                                min-width: 130px; /* 使用最小宽度而不是固定宽度 */
+                                                flex-shrink: 0; /* 防止被压缩 */
+                                            }
+                                            
+                                            .volume-slider {
+                                                width: 100px;
+                                                margin-left: 8px;
+                                                min-width: 100px; /* 确保滑块始终保持固定宽度 */
+                                            }
+                                            
+                                            .volume-slider::-webkit-slider-thumb {
+                                                -webkit-appearance: none;
+                                                appearance: none;
+                                                width: 16px;
+                                                height: 16px;
+                                                background: var(--primary-color);
+                                                border-radius: 50%;
+                                                cursor: pointer;
+                                            }
+                                            
+                                            .volume-slider::-moz-range-thumb {
+                                                width: 16px;
+                                                height: 16px;
+                                                background: var(--primary-color);
+                                                border-radius: 50%;
+                                                cursor: pointer;
+                                                border: none;
+                                            }
+                                            
+                                            /* 频道Logo样式 */
+                                            .channel-logo-container {
+                                                display: flex;
+                                                justify-content: center;
+                                                margin-bottom: 8px;
+                                            }
+                                            
+                                            .channel-logo {
+                                                width: 180px;
+                                                height: 180px;
+                                                object-fit: contain;
+                                                background-color: rgba(255, 255, 255, 0.1);
+                                                border-radius: 4px;
+                                                transition: opacity 0.3s ease;
+                                            }
+                                            
+                                            .channel-logo.loading {
+                                                opacity: 0.5;
+                                            }
+                                            .player-controls {
+                                                display: flex;
+                                                align-items: center;
+                                                gap: 8px;
+                                                position: relative;
+                                            }
+                                            .progress-container {
+                                                flex: 1;
+                                                height: 6px;
+                                                background-color: rgba(255, 255, 255, 0.2);
+                                                border-radius: 3px;
+                                                position: relative;
+                                                cursor: pointer;
+                                                margin: 0 12px;
+                                            }
+                                            .progress-bar {
+                                                height: 100%;
+                                                background-color: var(--primary-color);
+                                                border-radius: 3px;
+                                                width: 0;
+                                                transition: width 0.1s ease;
+                                            }
+                                            .progress-handle {
+                                                position: absolute;
+                                                top: 50%;
+                                                transform: translate(-50%, -50%);
+                                                width: 12px;
+                                                height: 12px;
+                                                background-color: var(--primary-color);
+                                                border-radius: 50%;
+                                                opacity: 0;
+                                                transition: opacity 0.2s ease;
+                                            }
+                                            .progress-container:hover .progress-handle {
+                                                opacity: 1;
+                                            }
+                                            .time-display {
+                                                font-size: 0.8rem;
+                                                color: var(--text-primary);
+                                                min-width: 45px;
+                                                text-align: center;
+                                                flex-shrink: 0; /* 防止被压缩 */
+                                            }
+                                            .volume-control {
+                                                display: flex;
+                                                align-items: center;
+                                                gap: 8px;
+                                            }
+                                            #volumeSlider {
+                                                -webkit-appearance: none;
+                                                height: 4px;
+                                                background: var(--bg-tertiary);
+                                                border-radius: 2px;
+                                                outline: none;
+                                            }
+                                            #volumeSlider::-webkit-slider-thumb {
+                                                -webkit-appearance: none;
+                                                width: 12px;
+                                                height: 12px;
+                                                background: var(--primary-color);
+                                                border-radius: 50%;
+                                                cursor: pointer;
+                                            }
+                                            #volumeSlider::-moz-range-thumb {
+                                                width: 12px;
+                                                height: 12px;
+                                                background: var(--primary-color);
+                                                border-radius: 50%;
+                                                cursor: pointer;
+                                                border: none;
+                                            }
+                                                appearance: none;
+                                                width: 16px;
+                                                height: 16px;
+                                                background: var(--primary-color);
+                                                border-radius: 50%;
+                                                cursor: pointer;
+                                            }
+                                            #volumeSlider::-moz-range-thumb {
+                                                width: 16px;
+                                                height: 16px;
+                                                background: var(--primary-color);
+                                                border-radius: 50%;
+                                                cursor: pointer;
+                                                border: none;
+                                            }
+                                        </style>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        </div>
+                    </div>
+                    <!-- 第二行：底部管理区域 - 三列布局 -->
+                    <div class="grid grid-cols-3 gap-4">
+                        <!-- 添加订阅源卡片 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">添加订阅源</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="playlistUrl" class="form-label">订阅地址 (M3U/M3U8)</label>
+                                    <input type="text" id="playlistUrl" class="form-control" placeholder="https://example.com/playlist.m3u">
+                                </div>
+                                <div class="form-group">
+                                    <label for="playlistName" class="form-label">订阅名称</label>
+                                    <input type="text" id="playlistName" class="form-control" placeholder="我的频道列表">
+                                </div>
+                                <div class="btn-group">
+                                    <button id="loadPlaylistBtn" class="btn btn-primary">加载订阅</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 频道订阅管理卡片 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">已订阅频道管理</h3>
+                            </div>
+                            <div class="card-body" style="padding: 0;">
+                                <!-- 订阅列表 - 使用playlist-manager容器确保固定高度 -->
+                                <div class="playlist-manager">
+                                    <div id="playlistList" class="playlist-list">
+                                        <!-- 订阅卡片将在这里动态生成 -->
+                                        <div class="empty-state">
+                                            <div class="empty-title">暂无订阅源</div>
+                                            <p>添加一个M3U订阅源开始使用</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 当前播放信息 -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">播放信息</h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="playerInfo" class="empty-state">
+                                    <div class="empty-title">未播放任何内容</div>
+                                    <p>请从左侧选择一个频道开始播放</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 频道管理区域（已集成到首页） -->
+            <section id="playlistsSection" class="section hidden">
+                <!-- 此部分功能已集成到首页底部管理区域 -->
+            </section>
+
+            <!-- 设置区域 - 已隐藏 -->
+            <section id="settingsSection" class="section hidden" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">播放器设置</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="proxyServer" class="form-label">代理服务器</label>
+                            <input type="text" id="proxyServer" class="form-control" placeholder="http://localhost:3000/api/v1/streamingProxy" value="/api/v1/streamingProxy">
+                            <small class="text-secondary">留空则不使用代理</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="retryCount" class="form-label">加载重试次数</label>
+                            <input type="number" id="retryCount" class="form-control" min="0" max="10" value="3">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="themeSelect" class="form-label">主题设置</label>
+                            <select id="themeSelect" class="form-control">
+                                <option value="dark">深色主题</option>
+                                <option value="light">浅色主题</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">播放器行为</label>
+                            <div>
+                                <label><input type="checkbox" id="autoPlay" checked> 自动播放</label>
+                                <label style="margin-left: 20px;"><input type="checkbox" id="rememberLastPlay"> 记住上次播放</label>
+                            </div>
+                        </div>
+
+                        <div class="btn-group">
+                            <button id="saveSettingsBtn" class="btn btn-primary">保存设置</button>
+                            <button id="resetSettingsBtn" class="btn btn-secondary">重置</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">关于</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>M3U8 流媒体播放器 v1.0</p>
+                        <p>支持播放M3U/M3U8格式的网络电视和广播频道</p>
+                        <div style="margin-top: 16px; font-size: 0.9rem; color: var(--text-secondary);">
+                            <p>使用技术:</p>
+                            <ul style="margin-left: 20px; margin-top: 8px;">
+                                <li>HTML5 Video</li>
+                                <li>HLS.js</li>
+                                <li>现代CSS</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
 
-    <div id="video-container">
-      <video id="video" controls></video>
+    <!-- 通知元素 -->
+    <div id="notification" class="notification"></div>
+
+    <!-- 模态框 -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">提示</h2>
+                <button class="close-button" id="closeModal">×</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- 模态框内容将在这里动态生成 -->
+            </div>
+            <div class="modal-footer">
+                <button id="modalCancel" class="btn btn-secondary">取消</button>
+                <button id="modalConfirm" class="btn btn-primary">确定</button>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <footer>
-    Made by <a href="https://github.com/metahat" target="_blank" rel="noopener noreferrer">Metahat</a>
-  </footer>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const video = document.getElementById('video');
-      const urlInput = document.getElementById('url-input');
-      const loadBtn = document.getElementById('load-btn');
-      const statusDiv = document.getElementById('status');
-      
-      let hls = null;
-
-      function destroyPlayer() {
-        if (hls) {
-          hls.destroy();
-          hls = null;
-        }
-        video.src = '';
-      }
-
-      function showStatus(message, type = 'info') {
-        statusDiv.textContent = message;
-        statusDiv.className = type;
-        statusDiv.style.display = 'block';
-      }
-
-      function loadStream(url) {
-        destroyPlayer();
-        showStatus('Loading stream...', 'loading');
-        
-        const proxyUrl = `/api/v1/streamingProxy?url=${encodeURIComponent(url)}`;
-        
-        if (Hls.isSupported()) {
-          hls = new Hls({
-            debug: false,
-            xhrSetup: function(xhr) {
-              xhr.setRequestHeader('Referer', 'https://megacloud.club/');
+    <script>
+        // 添加全局错误处理
+        window.onerror = function(message, source, lineno, colno, error) {
+            // 专门处理ct.js的document.body为null错误
+            if (message.includes('document.body is null') && source && source.includes('ct.js')) {
+                console.warn('检测到外部脚本ct.js错误，正在安全处理...');
+                // 尝试延迟修复document.body引用问题
+                setTimeout(function() {
+                    if (typeof document !== 'undefined' && document.body) {
+                        console.log('document.body现已可用');
+                    }
+                }, 100);
+                // 防止错误冒泡并阻止默认处理
+                return true;
             }
-          });
-          
-          hls.loadSource(proxyUrl);
-          hls.attachMedia(video);
-          
-          hls.on(Hls.Events.MANIFEST_PARSED, function() {
-            showStatus('Stream loaded successfully!', 'success');
-            video.play().catch(e => {
-              showStatus('Playback error: ' + e.message, 'error');
-            });
-          });
-          
-          hls.on(Hls.Events.ERROR, function(event, data) {
-            if (data.fatal) {
-              let errorMsg = 'Player Error: ';
-              switch(data.type) {
-                case Hls.ErrorTypes.NETWORK_ERROR:
-                  errorMsg += 'Network Error - ' + data.details;
-                  break;
-                case Hls.ErrorTypes.MEDIA_ERROR:
-                  errorMsg += 'Media Error - ' + data.details;
-                  break;
-                default:
-                  errorMsg += data.details || 'Unknown Error';
-              }
-              showStatus(errorMsg, 'error');
-              destroyPlayer();
+            // 其他错误正常处理
+            return false;
+        };
+        
+        // 添加脚本错误事件监听
+        window.addEventListener('error', function(event) {
+            if (event.target && event.target.tagName === 'SCRIPT' && 
+                event.target.src && event.target.src.includes('ct.js')) {
+                console.warn('捕获到外部脚本ct.js加载错误:', event.error);
+                event.preventDefault();
             }
-          });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // Fallback for native HLS support (e.g., Safari)
-          video.src = proxyUrl;
-          video.addEventListener('loadedmetadata', function() {
-            showStatus('Stream loaded successfully!', 'success');
-            video.play().catch(e => {
-              showStatus('Playback error: ' + e.message, 'error');
+        }, true);
+        
+        // 确保即使有外部脚本错误，应用也能启动
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+            // 页面加载完成后显示内容，防止FOUC
+            function showPageContent() {
+                // 确保样式表已加载完成
+                const sheets = document.styleSheets;
+                let allSheetsLoaded = true;
+                
+                // 检查内联样式是否已加载（对于内联样式，我们假设它们已经可用）
+                // 对于这个应用，主要是内联样式，所以直接继续
+                
+                // 添加app-loaded类显示页面
+                document.documentElement.classList.add('app-loaded');
+                document.body.classList.add('app-loaded');
+                console.log('页面内容已显示');
+                
+                // 在内容显示后再初始化应用
+                if (typeof initApp === 'function') {
+                    console.log('开始初始化应用...');
+                    initApp();
+                }
+            }
+            
+            // 检查DOM是否已加载
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('DOM内容已加载');
+                    // 稍微延迟一点以确保样式应用
+                    setTimeout(showPageContent, 100);
+                });
+            } else {
+                console.log('DOM已准备就绪');
+                // 如果DOM已经准备好，立即显示内容
+                showPageContent();
+            }
+        }
+        
+        // 移除原有的DOMContentLoaded事件监听器，避免重复初始化
+        // 将在showPageContent中手动调用initApp
+        
+        // 配置和状态变量
+        const config = {
+            proxyUrl: '/api/v1/streamingProxy', // 使用正确的代理路径
+            retryCount: 3,
+            maxRetryDelay: 5000,
+            defaultTimeout: 10000
+        };
+
+        // 全局状态变量
+        let currentPlaylist = null;
+        let currentChannel = null;
+        let storedPlaylists = [];
+        let allChannels = [];
+        let hls = null;
+        let video = null;
+        let activeSection = 'home';
+        let elements = {};
+
+        // 初始化应用
+        function initApp() {
+            // 初始化DOM元素引用
+            video = document.getElementById('videoPlayer');
+            
+            // DOM 元素
+            elements = {
+                navLinks: document.getElementById('navLinks'),
+                mobileMenuBtn: document.getElementById('mobileMenuBtn'),
+                sections: document.querySelectorAll('.section'),
+                channelList: document.getElementById('channelList'),
+                groupTags: document.getElementById('groupTags'),
+                channelSearch: document.getElementById('channelSearch'),
+                playlistUrl: document.getElementById('playlistUrl'),
+                playlistName: document.getElementById('playlistName'),
+                loadPlaylistBtn: document.getElementById('loadPlaylistBtn'),
+                managePlaylistsBtn: document.getElementById('managePlaylistsBtn'),
+                currentChannelTitle: document.getElementById('currentChannelTitle'),
+                currentChannelGroup: document.getElementById('currentChannelGroup'),
+                playerInfo: document.getElementById('playerInfo'),
+                notification: document.getElementById('notification'),
+                modal: document.getElementById('modal'),
+                modalTitle: document.getElementById('modalTitle'),
+                modalBody: document.getElementById('modalBody'),
+                closeModal: document.getElementById('closeModal'),
+                modalCancel: document.getElementById('modalCancel'),
+                modalConfirm: document.getElementById('modalConfirm'),
+                playlistList: document.getElementById('playlistList'),
+                // 移除了不再使用的元素引用：newPlaylistName, newPlaylistUrl, addPlaylistBtn
+                saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+                resetSettingsBtn: document.getElementById('resetSettingsBtn'),
+                fullscreenBtn: document.getElementById('fullscreenBtn')
+            };
+            
+            // 加载存储的订阅列表
+            loadStoredPlaylists();
+            
+            // 加载设置
+            loadSettings();
+            
+            // 渲染订阅列表
+            renderPlaylistList();
+            
+            // 设置事件监听器
+            setupEventListeners();
+            
+            // 从URL参数加载订阅（如果有）
+            const urlParams = new URLSearchParams(window.location.search);
+            const playlistUrlParam = urlParams.get('url');
+            if (playlistUrlParam) {
+                elements.playlistUrl.value = playlistUrlParam;
+                if (!elements.playlistName.value) {
+                    elements.playlistName.value = '从URL加载';
+                }
+                loadPlaylist();
+            }
+        }
+
+        // 播放/暂停切换功能
+        function togglePlayPause() {
+            if (video.paused || video.ended) {
+                video.play().then(() => {
+                    // 更新播放按钮图标
+                    const playPauseBtn = document.getElementById('playPauseBtn');
+                    if (playPauseBtn) {
+                        playPauseBtn.innerHTML = '⏸️';
+                    }
+                }).catch(error => {
+                    showNotification('播放失败: ' + error.message, 'error');
+                });
+            } else {
+                video.pause();
+                // 更新暂停按钮图标
+                const playPauseBtn = document.getElementById('playPauseBtn');
+                if (playPauseBtn) {
+                    playPauseBtn.innerHTML = '▶️';
+                }
+            }
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 导航栏切换
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const section = link.getAttribute('data-section');
+                    switchSection(section);
+                });
             });
-          });
-          video.addEventListener('error', function() {
-            showStatus('Error loading stream', 'error');
-          });
-        } else {
-          showStatus('HLS is not supported in this browser', 'error');
-        }
-      }
 
-      loadBtn.addEventListener('click', function() {
-        const url = urlInput.value.trim();
-        if (!url) {
-          showStatus('Please enter a valid URL', 'error');
-          return;
-        }
-        
-        if (!url.endsWith('.m3u8')) {
-          showStatus('Please enter a valid .m3u8 URL', 'error');
-          return;
-        }
-        
-        loadStream(url);
-      });
+            // 移动端菜单
+            elements.mobileMenuBtn.addEventListener('click', () => {
+                elements.navLinks.classList.toggle('show');
+            });
 
-      // Load test stream by default for quick testing
-      urlInput.value = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
-    });
-  </script>
+            // 加载订阅按钮
+            elements.loadPlaylistBtn.addEventListener('click', loadPlaylist);
+
+            // 管理订阅按钮 - 如果存在
+            if (elements.managePlaylistsBtn) {
+                elements.managePlaylistsBtn.addEventListener('click', () => {
+                    switchSection('home');
+                });
+            }
+
+            // 频道搜索
+            elements.channelSearch.addEventListener('input', filterChannels);
+
+            // 模态框事件
+            elements.closeModal.addEventListener('click', closeModal);
+            elements.modalCancel.addEventListener('click', closeModal);
+            elements.modal.addEventListener('click', (e) => {
+                if (e.target === elements.modal) {
+                    closeModal();
+                }
+            });
+
+            // 移除了重复的添加订阅按钮，添加订阅功能已整合到加载订阅按钮中
+
+            // 保存设置按钮
+            elements.saveSettingsBtn.addEventListener('click', saveSettings);
+            elements.resetSettingsBtn.addEventListener('click', resetSettings);
+
+            // 视频播放器事件
+            video.addEventListener('error', handleVideoError);
+            video.addEventListener('play', () => {
+                showNotification('开始播放', 'success');
+                // 更新播放按钮图标为暂停
+                const playPauseBtn = document.getElementById('playPauseBtn');
+                if (playPauseBtn) {
+                    playPauseBtn.innerHTML = '⏸️';
+                }
+            });
+            
+            video.addEventListener('pause', () => {
+                // 更新播放按钮图标为播放
+                const playPauseBtn = document.getElementById('playPauseBtn');
+                if (playPauseBtn) {
+                    playPauseBtn.innerHTML = '▶️';
+                }
+            });
+            
+            // 播放/暂停按钮事件
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            if (playPauseBtn) {
+                playPauseBtn.addEventListener('click', togglePlayPause);
+            }
+            
+            // 视频元素点击事件，支持点击视频区域播放/暂停
+            video.addEventListener('click', togglePlayPause);
+            
+            // 刷新按钮事件
+            document.getElementById('refreshBtn').addEventListener('click', () => {
+                if (currentChannel) {
+                    playChannel(currentChannel);
+                    showNotification('正在刷新频道...', 'info');
+                }
+            });
+            
+            // 保存按钮事件
+            document.getElementById('saveBtn').addEventListener('click', () => {
+                if (currentChannel) {
+                    // 创建一个临时的播放列表对象只包含当前频道
+                    // 添加isSingleChannel标记，以便后续正确处理
+                    const tempPlaylist = {
+                        name: currentChannel.name || '未命名频道',
+                        url: currentChannel.url,
+                        channels: [currentChannel],
+                        isSingleChannel: true
+                    };
+                    
+                    // 添加到存储的播放列表
+                    storedPlaylists.push(tempPlaylist);
+                    saveStoredPlaylists();
+                    renderPlaylistList();
+                    showNotification(`已保存频道 "${currentChannel.name || '未命名频道'}"`, 'success');
+                }
+            });
+            
+            // 全屏按钮点击事件
+            elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
+            
+            // 全屏切换函数
+            function toggleFullscreen() {
+                const playerWrapper = document.querySelector('.player-wrapper');
+                if (!document.fullscreenElement) {
+                    // 进入全屏
+                    if (playerWrapper.requestFullscreen) {
+                        playerWrapper.requestFullscreen();
+                    } else if (playerWrapper.webkitRequestFullscreen) {
+                        playerWrapper.webkitRequestFullscreen();
+                    } else if (playerWrapper.msRequestFullscreen) {
+                        playerWrapper.msRequestFullscreen();
+                    }
+                } else {
+                    // 退出全屏
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }
+                }
+            }
+            
+            // 播放器按钮事件
+            
+            // 音量按钮和滑块事件
+            const volumeBtn = document.getElementById('volumeBtn');
+            const volumeSlider = document.getElementById('volumeSlider');
+            let isMuted = false;
+            let previousVolume = 1;
+            
+            // 音量按钮点击实现静音切换
+            volumeBtn.addEventListener('click', () => {
+                toggleMute();
+            });
+            
+            // 静音切换功能
+            function toggleMute() {
+                if (isMuted) {
+                    // 取消静音，恢复之前的音量
+                    video.volume = previousVolume;
+                    isMuted = false;
+                } else {
+                    // 静音，保存当前音量
+                    previousVolume = video.volume;
+                    video.volume = 0;
+                    isMuted = true;
+                }
+                updateVolumeIcon();
+                volumeSlider.value = video.volume;
+            }
+            
+            // 音量滑块控制
+            volumeSlider.addEventListener('input', () => {
+                video.volume = volumeSlider.value;
+                // 如果通过滑块调节音量，更新静音状态
+                isMuted = video.volume === 0;
+                // 更新音量图标
+                updateVolumeIcon();
+            });
+            
+            // 音量变化时更新图标
+            function updateVolumeIcon() {
+                if (video.volume === 0) {
+                    volumeBtn.textContent = '🔇';
+                } else if (video.volume < 0.5) {
+                    volumeBtn.textContent = '🔈';
+                } else {
+                    volumeBtn.textContent = '🔊';
+                }
+            }
+            
+            // 初始化音量图标
+            updateVolumeIcon();
+            
+            // 移除了隐藏音量滑块的逻辑，滑块现在始终可见
+            
+            // 播放进度控制相关
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressHandle = document.getElementById('progressHandle');
+            
+            // 时间格式化函数 (秒 -> mm:ss)
+            function formatTime(seconds) {
+                if (isNaN(seconds)) return '00:00';
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            // 更新播放进度
+            function updateProgress() {
+                if (video.duration) {
+                    const percent = (video.currentTime / video.duration) * 100;
+                    progressBar.style.width = percent + '%';
+                    progressHandle.style.left = percent + '%';
+                    
+                    // 更新时间显示
+                    document.getElementById('currentTime').textContent = formatTime(video.currentTime);
+                    document.getElementById('totalTime').textContent = formatTime(video.duration);
+                }
+            }
+            
+            // 视频时间更新事件
+            video.addEventListener('timeupdate', updateProgress);
+            
+            // 进度条点击跳转
+            progressContainer.addEventListener('click', (e) => {
+                const rect = progressContainer.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                video.currentTime = pos * video.duration;
+            });
+            
+            // 拖动进度条
+            let isDragging = false;
+            
+            progressHandle.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const rect = progressContainer.getBoundingClientRect();
+                let pos = (e.clientX - rect.left) / rect.width;
+                // 限制在0-1范围内
+                pos = Math.max(0, Math.min(1, pos));
+                
+                const percent = pos * 100;
+                progressBar.style.width = percent + '%';
+                progressHandle.style.left = percent + '%';
+            });
+            
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    // 设置视频位置
+                    const percent = parseFloat(progressBar.style.width) / 100;
+                    video.currentTime = percent * video.duration;
+                }
+            });
+            
+            // 视频加载元数据时更新进度条
+            video.addEventListener('loadedmetadata', updateProgress);
+            // 视频开始播放时更新进度条
+            video.addEventListener('play', updateProgress);
+            // 视频结束时重置进度条
+            video.addEventListener('ended', updateProgress);
+        }
+
+        // 切换页面区域
+        function switchSection(sectionId) {
+            if (activeSection === sectionId) return;
+            
+            activeSection = sectionId;
+            
+            // 更新导航栏状态
+            document.querySelectorAll('.nav-link').forEach(link => {
+                if (link.getAttribute('data-section') === sectionId) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+            
+            // 隐藏所有区域，显示选中的区域
+            document.querySelectorAll('.section').forEach(section => {
+                if (section.id === sectionId + 'Section') {
+                    section.classList.remove('hidden');
+                    section.classList.add('fade-in');
+                } else {
+                    section.classList.add('hidden');
+                    section.classList.remove('fade-in');
+                }
+            });
+            
+            // 隐藏移动端菜单
+            elements.navLinks.classList.remove('show');
+        }
+
+        // 加载订阅列表
+        function loadPlaylist() {
+            const url = elements.playlistUrl.value.trim();
+            const name = elements.playlistName.value.trim() || '未命名订阅';
+            
+            if (!url) {
+                showNotification('请输入订阅地址', 'error');
+                return;
+            }
+            
+            // 显示加载状态
+            showLoading(true);
+            
+            // 重置当前状态
+            allChannels = [];
+            currentPlaylist = null;
+            
+            // 加载和解析M3U内容
+            fetchM3UContent(url, name)
+                .then(playlist => {
+                    currentPlaylist = playlist;
+                    allChannels = playlist.channels;
+                    
+                    // 渲染频道列表
+                    renderChannelList();
+                    renderGroupTags();
+                    
+                    showNotification(`成功加载 ${playlist.channels.length} 个频道`, 'success');
+                    
+                    // 如果有频道，自动选择第一个
+                    if (playlist.channels.length > 0) {
+                        selectChannel(playlist.channels[0]);
+                    }
+                    
+                    // 加载成功后保存订阅
+                    addPlaylistToList(name, url);
+                    showNotification('订阅已保存到管理列表', 'success');
+                })
+                .catch(error => {
+                    console.error('加载订阅失败:', error);
+                    
+                    // 对于403错误的特殊处理
+                    if (error.message.includes('403')) {
+                        showNotification(`加载失败: ${error.message}`, 'error');
+                        
+                        // 询问用户是否仍要保存此订阅
+                        if (confirm('该订阅源返回403错误（访问被拒绝），但您仍可以将其保存到订阅列表中。是否保存？')) {
+                            addPlaylistToList(name, url);
+                            showNotification('订阅已保存到管理列表，但当前无法访问', 'warning');
+                        }
+                    } else {
+                        showNotification(`加载失败: ${error.message}`, 'error');
+                        
+                        // 尝试使用备用代理（仅对非403错误）
+                        if (config.proxyUrl === '/api/v1/streamingProxy') {
+                            showNotification('尝试使用备用代理...', 'info');
+                            const originalProxy = config.proxyUrl;
+                            config.proxyUrl = '/api/v1/streamingProxy';
+                            
+                            fetchM3UContent(url, name)
+                                .then(playlist => {
+                                    currentPlaylist = playlist;
+                                    allChannels = playlist.channels;
+                                    renderChannelList();
+                                    renderGroupTags();
+                                    showNotification(`使用备用代理成功加载 ${playlist.channels.length} 个频道`, 'success');
+                                    
+                                    if (playlist.channels.length > 0) {
+                                        selectChannel(playlist.channels[0]);
+                                    }
+                                    
+                                    // 加载成功后保存订阅
+                                    addPlaylistToList(name, url);
+                                })
+                                .catch(err => {
+                                    config.proxyUrl = originalProxy; // 恢复原代理
+                                    showNotification(`备用代理也失败: ${err.message}`, 'error');
+                                })
+                                .finally(() => showLoading(false));
+                            return; // 避免执行外部的finally
+                        }
+                    }
+                })
+                .finally(() => {
+                    showLoading(false);
+                });
+        }
+
+        // 获取M3U内容（带重试机制）
+        async function fetchM3UContent(url, name, retryCount = 0) {
+            try {
+                let fetchUrl = url;
+                
+                // 如果配置了代理，使用代理
+                if (config.proxyUrl && config.proxyUrl.trim()) {
+                    fetchUrl = `${config.proxyUrl}?url=${encodeURIComponent(url)}`;
+                }
+                
+                const response = await fetch(fetchUrl, {
+                    headers: {
+                        'Accept': 'text/plain, application/x-mpegURL'
+                    },
+                    timeout: config.defaultTimeout
+                });
+                
+                // 对403错误特殊处理，不进行重试
+                if (response.status === 403) {
+                    throw new Error(`HTTP 403 错误：访问被拒绝，请检查订阅源地址是否有效`);
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP错误 ${response.status}`);
+                }
+                
+                const text = await response.text();
+                return parseM3U(text, name, url);
+            } catch (error) {
+                // 对于403错误或其他错误，仅在满足重试条件时重试
+                if (retryCount < config.retryCount && !error.message.includes('403')) {
+                    const delay = Math.min(1000 * Math.pow(2, retryCount), config.maxRetryDelay);
+                    showNotification(`重试中... (${retryCount + 1}/${config.retryCount})`, 'info');
+                    
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchM3UContent(url, name, retryCount + 1);
+                }
+                
+                throw error;
+            }
+        }
+
+        // 解析M3U内容
+        function parseM3U(content, name, url) {
+            const lines = content.split('\n');
+            const channels = [];
+            let currentChannel = null;
+            let currentGroup = '未分组';
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.startsWith('#EXTINF:')) {
+                    // 提取频道信息
+                    const match = line.match(/#EXTINF:-?\d+\s*(.*?),\s*(.*)/);
+                    if (match) {
+                        const info = match[1];
+                        const channelName = match[2];
+                        
+                        // 提取分组信息
+                        const groupMatch = info.match(/group-title="([^"]+)"/);
+                        if (groupMatch) {
+                            currentGroup = groupMatch[1];
+                        }
+                        
+                        // 提取tvg-id
+                        const tvgIdMatch = info.match(/tvg-id="([^"]+)"/);
+                        const tvgId = tvgIdMatch ? tvgIdMatch[1] : null;
+                        
+                        // 提取logo
+                        const logoMatch = info.match(/tvg-logo="([^"]+)"/);
+                        const logo = logoMatch ? logoMatch[1] : null;
+                        
+                        currentChannel = {
+                            id: channels.length + 1,
+                            name: channelName,
+                            group: currentGroup,
+                            tvgId: tvgId,
+                            logo: logo,
+                            url: null
+                        };
+                    }
+                } else if (line && !line.startsWith('#') && currentChannel) {
+                    // 频道URL
+                    currentChannel.url = line;
+                    channels.push(currentChannel);
+                    currentChannel = null;
+                }
+            }
+            
+            return {
+                name: name,
+                url: url,
+                channels: channels,
+                groups: [...new Set(channels.map(c => c.group))].sort()
+            };
+        }
+
+        // 渲染频道列表
+        function renderChannelList(filterGroup = null, searchTerm = '') {
+            elements.channelList.innerHTML = '';
+            
+            if (allChannels.length === 0) {
+                elements.channelList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📺</div>
+                        <div class="empty-title">暂无频道</div>
+                        <p>请先添加M3U订阅源</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 过滤频道
+            let filteredChannels = [...allChannels];
+            
+            if (filterGroup) {
+                filteredChannels = filteredChannels.filter(channel => channel.group === filterGroup);
+            }
+            
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                filteredChannels = filteredChannels.filter(channel => 
+                    channel.name.toLowerCase().includes(term) || 
+                    channel.group.toLowerCase().includes(term)
+                );
+            }
+            
+            if (filteredChannels.length === 0) {
+                elements.channelList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-title">没有找到匹配的频道</div>
+                        <p>请尝试其他搜索关键词</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 按分组组织频道
+            const channelsByGroup = {};
+            filteredChannels.forEach(channel => {
+                if (!channelsByGroup[channel.group]) {
+                    channelsByGroup[channel.group] = [];
+                }
+                channelsByGroup[channel.group].push(channel);
+            });
+            
+            // 渲染分组和频道
+            Object.keys(channelsByGroup).sort().forEach(groupName => {
+                const groupChannels = channelsByGroup[groupName];
+                
+                const groupElement = document.createElement('div');
+                groupElement.className = 'group-section';
+                groupElement.innerHTML = `
+                    <div class="group-header" data-group="${groupName}">
+                        <span>${groupName} (${groupChannels.length})</span>
+                        <span class="group-toggle">▼</span>
+                    </div>
+                    <div class="group-content">
+                        ${groupChannels.map(channel => `
+                            <div class="channel-item" data-id="${channel.id}">
+                                <div class="channel-icon">📺</div>
+                                <span>${channel.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                elements.channelList.appendChild(groupElement);
+                
+                // 添加分组展开/折叠事件
+                const header = groupElement.querySelector('.group-header');
+                const content = groupElement.querySelector('.group-content');
+                const toggle = groupElement.querySelector('.group-toggle');
+                
+                header.addEventListener('click', () => {
+                    content.classList.toggle('collapsed');
+                    toggle.classList.toggle('collapsed');
+                });
+                
+                // 添加频道点击事件
+                groupElement.querySelectorAll('.channel-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const channelId = parseInt(item.getAttribute('data-id'));
+                        const channel = groupChannels.find(c => c.id === channelId);
+                        if (channel) {
+                            selectChannel(channel);
+                        }
+                    });
+                });
+            });
+        }
+
+        // 渲染分组标签
+        function renderGroupTags() {
+            elements.groupTags.innerHTML = '';
+            
+            if (!currentPlaylist || !currentPlaylist.groups || currentPlaylist.groups.length === 0) {
+                return;
+            }
+            
+            // 全部频道标签
+            const allTag = document.createElement('span');
+            allTag.className = 'tag active';
+            allTag.textContent = '全部';
+            allTag.addEventListener('click', () => {
+                document.querySelectorAll('.tag').forEach(tag => tag.classList.remove('active'));
+                allTag.classList.add('active');
+                renderChannelList(null, elements.channelSearch.value);
+            });
+            elements.groupTags.appendChild(allTag);
+            
+            // 分组标签
+            currentPlaylist.groups.forEach(group => {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.textContent = group;
+                tag.addEventListener('click', () => {
+                    document.querySelectorAll('.tag').forEach(t => t.classList.remove('active'));
+                    tag.classList.add('active');
+                    renderChannelList(group, elements.channelSearch.value);
+                });
+                elements.groupTags.appendChild(tag);
+            });
+        }
+
+        // 过滤频道
+        function filterChannels() {
+            const searchTerm = elements.channelSearch.value.toLowerCase();
+            const activeTag = document.querySelector('.tag.active');
+            const group = activeTag.textContent === '全部' ? null : activeTag.textContent;
+            
+            renderChannelList(group, searchTerm);
+        }
+
+        // 选择频道
+        function selectChannel(channel) {
+            // 更新当前频道状态
+            currentChannel = channel;
+            
+            // 更新UI - 使用tvg-name作为显示名称
+            const displayName = channel.name || '未知频道';
+            elements.currentChannelTitle.textContent = displayName;
+            
+            // 更新频道Logo - 使用tvg-logo，如果没有则使用默认图片
+            const logoElement = document.getElementById('channelLogo');
+            if (logoElement) {
+                logoElement.src = channel.logo || 'https://via.placeholder.com/80x60?text=TV';
+                logoElement.alt = displayName;
+                logoElement.style.display = 'none'; // 隐藏播放区图片
+            }
+            
+            // 更新频道列表选中状态
+            document.querySelectorAll('.channel-item').forEach(item => {
+                if (parseInt(item.getAttribute('data-id')) === channel.id) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // 更新底部播放信息卡片
+            const playerInfo = document.getElementById('playerInfo');
+            if (playerInfo) {
+                // 检测是否为直播流
+                const isLiveStream = channel.url.includes('live') || channel.url.includes('stream') || channel.isLive;
+                
+                playerInfo.innerHTML = `
+                    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+                        <img src="${channel.logo || 'https://via.placeholder.com/180x180?text=TV'}" 
+                             alt="${displayName}" 
+                             style="width: 180px; height: 180px; object-fit: contain; margin-bottom: 10px; border-radius: 4px; background-color: rgba(255, 255, 255, 0.1);">
+                        <div style="font-weight: bold; margin-bottom: 5px;">${displayName} ${isLiveStream ? '<span style="background-color: #ff4d4f; color: white; padding: 2px 6px; margin-left: 8px; border-radius: 4px; font-size: 12px; vertical-align: middle;">LIVE</span>' : ''}</div>
+                        ${channel.group ? `<div style="color: var(--text-secondary); font-size: 0.9rem;">分组: ${channel.group}</div>` : ''}
+                        ${isLiveStream ? `<div style="color: #52c41a; font-size: 0.8rem;">直播中</div>` : ''}
+                    </div>
+                `;
+            }
+            
+            // 播放频道
+            playChannel(channel);
+        }
+
+        // 播放频道
+        function playChannel(channel) {
+            console.log(`开始播放频道: ${channel.name}`);
+            // 停止当前播放
+            if (hls) {
+                try {
+                    hls.destroy();
+                } catch (e) {
+                    console.warn('销毁旧的HLS实例时出错:', e);
+                }
+                hls = null;
+            }
+            
+            // 确保视频元素完全重置
+            try {
+                video.pause();
+                video.src = '';
+                video.load(); // 强制重新加载以清除任何旧资源
+            } catch (e) {
+                console.warn('重置视频元素时出错:', e);
+            }
+            
+            // 构建播放URL（使用代理）
+            let playUrl = channel.url;
+            if (config.proxyUrl && config.proxyUrl.trim()) {
+                playUrl = `${config.proxyUrl}?url=${encodeURIComponent(channel.url)}`;
+            }
+            
+            // 检测流类型
+            const isLiveStream = channel.url.includes('live') || channel.url.includes('stream') || channel.isLive;
+            const isAACStream = channel.url.includes('.aac') || channel.url.includes('audio');
+            
+            // 预先设置视频元素的自动播放属性，提高自动播放成功率
+            video.autoplay = document.getElementById('autoPlay').checked;
+            // 默认不静音，移除自动播放时的静音限制
+            video.muted = false;
+            // 尝试不使用静音模式，让电视直播和电台一样自动播放时有声音
+            // 添加错误处理，当浏览器阻止播放时尝试恢复
+            const handlePlayError = (e) => {
+                console.warn('播放失败，可能是浏览器自动播放策略限制:', e);
+                // 如果播放被阻止且不是静音状态，尝试静音后播放
+                if (!video.muted) {
+                    console.log('尝试静音模式播放以绕过浏览器限制');
+                    video.muted = true;
+                    const playPromise = video.play();
+                    if (playPromise) {
+                        playPromise.catch(err => console.warn('即使静音仍无法自动播放:', err));
+                    }
+                }
+                // 移除事件监听器避免重复触发
+                video.removeEventListener('error', handlePlayError);
+                video.removeEventListener('playerror', handlePlayError);
+            };
+            
+            // 添加错误监听器
+            video.addEventListener('error', handlePlayError);
+            video.addEventListener('playerror', handlePlayError);
+            
+            // 确保在用户交互后可以取消静音
+            const ensureAudioOnInteraction = () => {
+                if (video.muted) {
+                    console.log('用户交互后取消静音');
+                    video.muted = false;
+                }
+            };
+            
+            // 添加一次性的用户交互监听器
+            document.addEventListener('click', ensureAudioOnInteraction, { once: true });
+            document.addEventListener('keydown', ensureAudioOnInteraction, { once: true });
+            
+            
+            console.log(`初始化播放，频道: ${channel.name}, URL: ${playUrl}, 直播流: ${isLiveStream}, AAC流: ${isAACStream}`);
+            
+            // 根据流类型动态调整配置
+            const streamConfig = {
+                live: {
+                    maxBufferLength: 3,
+                    maxMaxBufferLength: 6,
+                    backBufferLength: 30,
+                    maxRetries: 5,
+                    retryDelay: 1000
+                },
+                audio: {
+                    maxBufferLength: 5,
+                    maxMaxBufferLength: 10,
+                    backBufferLength: 60,
+                    maxRetries: 3,
+                    retryDelay: 800
+                },
+                default: {
+                    maxBufferLength: 10,
+                    maxMaxBufferLength: 30,
+                    backBufferLength: 90,
+                    maxRetries: 3,
+                    retryDelay: 1000
+                }
+            };
+            
+            const currentConfig = isLiveStream ? streamConfig.live : (isAACStream ? streamConfig.audio : streamConfig.default);
+            
+            // 检查是否支持HLS
+            if (Hls.isSupported()) {
+                // 使用增强的HLS配置，提高兼容性并解决缓冲区和网络错误
+                hls = new Hls({
+                    // 基础配置
+                    enableWorker: false, // 禁用worker提高兼容性
+                    startPosition: -1, // 始终从最新位置开始
+                    // 缓冲区配置
+                    maxBufferLength: currentConfig.maxBufferLength,
+                    maxMaxBufferLength: currentConfig.maxMaxBufferLength,
+                    maxBufferHole: 0.2, // 增大缓冲区空洞容忍度以减少bufferSeekOverHole错误
+                    maxMaxBufferHole: 1.0, // 增大最大空洞容忍度
+                    // 网络配置优化
+                    fragLoadingTimeout: 30000, // 增加片段加载超时时间
+                    fragLoadingMaxRetry: 5, // 增加片段加载重试次数
+                    fragLoadingRetryDelay: currentConfig.retryDelay,
+                    levelLoadingRetryDelay: currentConfig.retryDelay,
+                    levelLoadingMaxRetry: currentConfig.maxRetries,
+                    // 错误处理配置
+                    enableCEA708Captions: false, // 禁用字幕功能
+                    backBufferLength: currentConfig.backBufferLength,
+                    // 修复NS_BINDING_ABORTED错误的配置
+                    progressive: true, // 启用渐进式加载
+                    autoStartLoad: true,
+                    startFragPrefetch: false // 减少初始请求数量
+                });
+                
+                // 网络状态检测器
+                let isOnline = navigator.onLine;
+                let currentNetworkType = 'unknown';
+                let adaptiveBufferEnabled = true;
+                
+                // 网络状态变化监听
+                window.addEventListener('online', () => {
+                    isOnline = true;
+                    console.log('网络连接恢复');
+                    showNotification('网络连接已恢复，继续播放', 'info');
+                    // 连接恢复时尝试恢复播放
+                    if (hls && video.paused) {
+                        setTimeout(() => {
+                            hls.recoverMediaError();
+                            video.play().catch(e => console.warn('恢复播放失败:', e));
+                        }, 1000);
+                    }
+                });
+                
+                window.addEventListener('offline', () => {
+                    isOnline = false;
+                    console.log('网络连接断开');
+                    showNotification('网络连接已断开，尝试使用缓存内容', 'warning');
+                });
+                
+                // 尝试检测网络类型
+                if (navigator.connection) {
+                    currentNetworkType = navigator.connection.effectiveType || 'unknown';
+                    // 根据网络类型调整缓冲区设置
+                    navigator.connection.addEventListener('change', () => {
+                        currentNetworkType = navigator.connection.effectiveType;
+                        adjustBufferForNetworkType();
+                    });
+                }
+                
+                // 根据网络类型调整缓冲区大小
+                function adjustBufferForNetworkType() {
+                    if (!adaptiveBufferEnabled || !hls) return;
+                    
+                    console.log('当前网络类型:', currentNetworkType);
+                    
+                    switch (currentNetworkType) {
+                        case '4g':
+                            // 4G网络可以设置较大的缓冲区
+                            hls.config.maxBufferLength = isLiveStream ? 4 : (isAACStream ? 8 : 15);
+                            hls.config.maxMaxBufferLength = isLiveStream ? 8 : (isAACStream ? 12 : 30);
+                            break;
+                        case '3g':
+                            // 3G网络设置中等缓冲区
+                            hls.config.maxBufferLength = isLiveStream ? 3 : (isAACStream ? 5 : 10);
+                            hls.config.maxMaxBufferLength = isLiveStream ? 6 : (isAACStream ? 10 : 20);
+                            break;
+                        case '2g':
+                        case 'slow-2g':
+                            // 慢速网络设置较小的缓冲区，减少加载压力
+                            hls.config.maxBufferLength = isLiveStream ? 2 : (isAACStream ? 3 : 5);
+                            hls.config.maxMaxBufferLength = isLiveStream ? 4 : (isAACStream ? 6 : 10);
+                            break;
+                        default:
+                            // 默认设置
+                            hls.config.maxBufferLength = currentConfig.maxBufferLength;
+                            hls.config.maxMaxBufferLength = currentConfig.maxMaxBufferLength;
+                    }
+                    
+                    console.log('缓冲区设置已调整:', hls.config.maxBufferLength, hls.config.maxMaxBufferLength);
+                }
+                
+                // 智能加载管理器
+                let loadingState = 'idle';
+                let loadingDebounceTimeout;
+                
+                // 增强的音频通道初始化函数 - 优化版
+                function ensureAudioChannelInitialized() {
+                    console.log('确保音频通道初始化...');
+                    
+                    // 方法1: 优化的音频通道初始化，避免不必要的短暂播放
+                    // 由于HLS.js在MANIFEST_PARSED后会自动处理播放，我们专注于确保音频轨道可用
+                    
+                    // 方法2: 提前强制启用所有音频轨道（如果有）
+                    setTimeout(() => {
+                        if (video.audioTracks && video.audioTracks.length > 0) {
+                            console.log('强制启用音频轨道:', video.audioTracks.length);
+                            for (let i = 0; i < video.audioTracks.length; i++) {
+                                video.audioTracks[i].enabled = true;
+                            }
+                        }
+                    }, 300);
+                    
+                    // 方法3: 使用Web Audio API静默初始化音频上下文
+                    if (window.AudioContext && !window.audioContext) {
+                        try {
+                            window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            if (window.audioContext.state === 'suspended') {
+                                // 在用户交互时恢复音频上下文
+                                const resumeAudio = () => {
+                                    window.audioContext.resume().then(() => {
+                                        console.log('音频上下文已恢复');
+                                    }).catch(e => {
+                                        console.warn('恢复音频上下文失败，但不影响播放:', e);
+                                    });
+                                    document.removeEventListener('click', resumeAudio);
+                                    document.removeEventListener('keydown', resumeAudio);
+                                };
+                                document.addEventListener('click', resumeAudio, { once: true });
+                                document.addEventListener('keydown', resumeAudio, { once: true });
+                            }
+                        } catch (e) {
+                            console.warn('创建音频上下文失败，但不影响基本播放:', e);
+                        }
+                    }
+                }
+                
+                // 添加关键事件监听
+                hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                    // 安全检查data.details是否存在
+                    const isLive = data.details && data.details.live;
+                    const duration = data.details && data.details.duration;
+                    console.log('HLS清单解析完成，总时长:', isLive ? '直播' : (duration ? `${duration}秒` : '未知'));
+                    showNotification(`正在播放: ${channel.name}`, 'success');
+                    
+                    // 喜马拉雅频道特殊处理
+                    const isXimalaya = channel.url.includes('ximalaya');
+                    
+                    // 无论是否自动播放，都预先初始化音频通道
+                    ensureAudioChannelInitialized();
+                    
+                    if (document.getElementById('autoPlay').checked) {
+                        // 尝试使用两种方式触发自动播放，提高成功率
+                        setTimeout(() => {
+                            const playPromise = video.play();
+                            
+                            if (playPromise !== undefined) {
+                                playPromise.then(() => {
+                                    console.log('自动播放成功');
+                                }).catch(error => {
+                                    console.warn('自动播放失败:', error);
+                                    // 根据错误类型提供更具体的提示
+                                    if (error.name === 'NotAllowedError') {
+                                        showNotification(isXimalaya ? '喜马拉雅频道需要点击播放' : '自动播放被浏览器阻止，请点击播放按钮', 'info');
+                                    } else if (error.name === 'AbortError' || error.message.includes('aborted by the user agent')) {
+                                        console.error('媒体资源获取被中止:', error);
+                                        showNotification('媒体加载被中止，正在尝试恢复...', 'warning');
+                                        // 尝试恢复策略
+                                        setTimeout(() => {
+                                            try {
+                                                // 停止并重新加载
+                                                hls.stopLoad();
+                                                setTimeout(() => {
+                                                    hls.loadSource(playUrl);
+                                                    hls.attachMedia(video);
+                                                }, 300);
+                                            } catch (recoverError) {
+                                                console.error('恢复失败，尝试降级:', recoverError);
+                                                // 尝试降级到原生播放
+                                                hls.destroy();
+                                                video.src = playUrl;
+                                                video.load();
+                                            }
+                                        }, 500);
+                                    } else {
+                                        showNotification('自动播放失败，点击播放按钮或视频区域开始播放', 'info');
+                                    }
+                                    
+                                    // 对于喜马拉雅音频流，尝试直接播放而不通过HLS.js
+                                    if (isXimalaya && error.name === 'NotAllowedError') {
+                                        console.log('尝试为喜马拉雅频道使用原生播放...');
+                                        try {
+                                            hls.destroy();
+                                            video.src = playUrl;
+                                            video.load();
+                                            setTimeout(() => {
+                                                video.play().catch(err => {
+                                                    console.warn('喜马拉雅原生播放也失败:', err);
+                                                });
+                                            }, 300);
+                                        } catch (e) {
+                                            console.error('切换到原生播放失败:', e);
+                                        }
+                                    }
+                                });
+                            }
+                        }, 200); // 稍微延迟以确保元素完全准备好 else {
+                        // 设置播放按钮初始状态
+                        const playPauseBtn = document.getElementById('playPauseBtn');
+                        if (playPauseBtn) {
+                            playPauseBtn.innerHTML = '▶️';
+                        }
+                    }
+                });
+                
+                // 关键错误处理
+                let errorCount = 0;
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    console.error('HLS错误:', data);
+                    
+                    if (data.fatal) {
+                        // 处理致命错误
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                if (errorCount < currentConfig.maxRetries) {
+                                    errorCount++;
+                                    showNotification(`网络错误，正在尝试重新连接(${errorCount}/${currentConfig.maxRetries})...`, 'warning');
+                                    
+                                    // 递增延迟重试
+                                    setTimeout(() => {
+                                        if (hls) {
+                                            hls.startLoad();
+                                        }
+                                    }, currentConfig.retryDelay * errorCount);
+                                } else {
+                                    showNotification('网络错误，无法连接到直播源', 'error');
+                                    // 尝试降级到原生播放
+                                    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                                        console.log('尝试降级到原生HLS播放...');
+                                        hls.destroy();
+                                        video.src = playUrl;
+                                        video.load();
+                                    } else {
+                                        hls.destroy();
+                                    }
+                                }
+                                break;
+                                
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                // 直播流的媒体错误可能是暂时的
+                                if (isLiveStream && data.details && data.details === 'bufferStalledError') {
+                                    showNotification('直播缓冲中...', 'info');
+                                    setTimeout(() => {
+                                        if (hls) {
+                                            hls.recoverMediaError();
+                                        }
+                                    }, currentConfig.retryDelay);
+                                } else {
+                                    showNotification('媒体错误，尝试恢复...', 'warning');
+                                    // 尝试恢复
+                        setTimeout(() => {
+                            try {
+                                // 添加额外的检查确保hls实例仍然有效
+                                if (hls && typeof hls.recoverMediaError === 'function') {
+                                    console.log('尝试恢复媒体错误');
+                                    // 先尝试停止加载，避免资源冲突
+                                    hls.stopLoad();
+                                    // 短暂延迟后恢复
+                                    setTimeout(() => {
+                                        try {
+                                            hls.recoverMediaError();
+                                            // 恢复时也确保音频轨道启用
+                                            if (video.audioTracks && video.audioTracks.length > 0) {
+                                                for (let i = 0; i < video.audioTracks.length; i++) {
+                                                    video.audioTracks[i].enabled = true;
+                                                }
+                                            }
+                                        } catch (recoverError) {
+                                            console.error('恢复媒体错误失败:', recoverError);
+                                            // 尝试完全重新加载
+                                            if (errorCount < currentConfig.maxRetries) {
+                                                errorCount++;
+                                                setTimeout(() => {
+                                                    hls.loadSource(playUrl);
+                                                    hls.attachMedia(video);
+                                                }, currentConfig.retryDelay * errorCount);
+                                            }
+                                        }
+                                    }, 200);
+                                }
+                            } catch (e) {
+                                console.error('执行恢复时出错:', e);
+                            }
+                        }, currentConfig.retryDelay);
+                                }
+                                break;
+                                
+                            case Hls.ErrorTypes.MANIFEST_ERROR:
+                                // 清单解析错误，可能是AAC流
+                                if (isAACStream || (data.details && data.details === 'manifestParsingError')) {
+                                    showNotification('清单解析错误，尝试以音频流方式播放...', 'info');
+                                    // 尝试降级到原生播放
+                                    if (video.canPlayType('audio/mpeg')) {
+                                        console.log('尝试以原生音频方式播放...');
+                                        hls.destroy();
+                                        video.src = playUrl;
+                                        video.load();
+                                    } else {
+                                        showNotification('无法播放该音频流', 'error');
+                                        hls.destroy();
+                                    }
+                                } else {
+                                    showNotification('清单解析错误', 'error');
+                                    hls.destroy();
+                                }
+                                break;
+                                
+                            default:
+                                showNotification('未知错误', 'error');
+                                hls.destroy();
+                                break;
+                        }
+                    } else {
+                        // 非致命错误的处理
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            console.warn('非致命网络错误:', data.details);
+                            
+                            // 特殊处理NS_BINDING_ABORTED错误
+                            if (data.details === 'fragLoadAbort') {
+                                console.warn('处理请求中止错误(NS_BINDING_ABORTED)...');
+                                // 不立即恢复，避免频繁请求，而是尝试重新加载特定片段
+                                if (data.frag) {
+                                    console.log('尝试重新加载片段:', data.frag.relurl);
+                                    hls.loadFrag(data.frag);
+                                }
+                            } else {
+                                // 对于直播流和音频流，更积极地恢复
+                                if (isLiveStream || isAACStream) {
+                                    hls.recoverMediaError();
+                                }
+                            }
+                        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            console.warn('非致命媒体错误:', data.details);
+                            
+                            // 特殊处理bufferSeekOverHole错误
+                            if (data.details === 'bufferSeekOverHole') {
+                                console.warn('处理缓冲区空洞错误(bufferSeekOverHole)...');
+                                // 针对缓冲区空洞的特定恢复策略
+                                if (video.currentTime < video.duration || isNaN(video.duration)) {
+                                    // 尝试跳转到更安全的位置（当前时间前0.5秒）
+                                    const newTime = Math.max(0, video.currentTime - 0.5);
+                                    console.log(`尝试从${video.currentTime}跳转到${newTime}修复缓冲区空洞`);
+                                    video.currentTime = newTime;
+                                    // 清理部分缓冲区并重新加载
+                                    hls.recoverMediaError();
+                                }
+                            } else {
+                                hls.recoverMediaError();
+                            }
+                        }
+                    }
+                });
+                
+                // 添加播放进度监听，实现智能预加载
+                hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+                    // 避免重复触发
+                    if (loadingDebounceTimeout) {
+                        clearTimeout(loadingDebounceTimeout);
+                    }
+                    
+                    loadingState = 'loading';
+                    
+                    // 加载完成后检查播放状态
+                    loadingDebounceTimeout = setTimeout(() => {
+                        loadingState = 'idle';
+                        
+                        // 如果当前没有网络连接，暂停加载
+                        if (!isOnline) {
+                            hls.stopLoad();
+                            console.log('网络离线，暂停加载');
+                        } else if (!video.paused && loadingState === 'idle') {
+                            // 恢复加载
+                            hls.startLoad();
+                        }
+                    }, 1000);
+                });
+                
+                // 监听视频暂停/播放状态，控制加载行为
+                video.addEventListener('pause', () => {
+                    if (hls && adaptiveBufferEnabled) {
+                        // 暂停时减少缓冲区压力，但保留一定的预加载
+                        hls.config.maxBufferLength = Math.max(2, currentConfig.maxBufferLength / 2);
+                        console.log('视频暂停，调整缓冲区以减少带宽使用');
+                    }
+                });
+                
+                video.addEventListener('play', () => {
+                    if (hls && adaptiveBufferEnabled) {
+                        // 恢复正常缓冲区设置
+                        adjustBufferForNetworkType();
+                        console.log('视频播放，恢复缓冲区设置');
+                    }
+                });
+                
+                // 添加音频故障检测和恢复逻辑
+                let audioCheckTimer;
+                let audioRestored = false;
+                let audioCheckCount = 0;
+                let isUsingNativePlayback = false; // 追踪是否使用原生播放模式
+                const maxAudioChecks = 5; // 增加尝试次数以提高成功率
+                let isAudioMuted = false;
+                // 全局音频上下文管理
+                let audioContext = null;
+                let audioContextCreated = false;
+                
+                // 提前创建音频上下文（在用户交互时）
+                function ensureAudioContext() {
+                    if (!audioContextCreated && typeof AudioContext !== 'undefined') {
+                        try {
+                            audioContext = new AudioContext();
+                            audioContextCreated = true;
+                            console.log('音频上下文已创建');
+                            // 立即恢复上下文（如果支持）
+                            if (audioContext.resume && audioContext.state === 'suspended') {
+                                audioContext.resume().catch(e => console.warn('无法恢复音频上下文:', e));
+                            }
+                        } catch (e) {
+                            console.warn('创建音频上下文失败:', e);
+                        }
+                    }
+                    return audioContext;
+                }
+                
+                // 增强的音频检测函数
+                function checkAudioStatus() {
+                    // 方法0: 首先确保音频上下文已创建
+                    ensureAudioContext();
+                    
+                    // 方法1: 检查audioTracks
+                    if (video.readyState >= 1 && video.audioTracks && video.audioTracks.length > 0) {
+                        console.log('检测到音频轨道:', video.audioTracks.length);
+                        // 确保启用所有音频轨道
+                        for (let i = 0; i < video.audioTracks.length; i++) {
+                            video.audioTracks[i].enabled = true;
+                        }
+                        return true;
+                    }
+                    
+                    // 方法2: 检查是否有有效时长（不是NaN或0）
+                    if (video.readyState >= 2 && !isNaN(video.duration) && video.duration > 0) {
+                        return true;
+                    }
+                    
+                    // 方法3: 检查视频是否有音频（通过canPlayType）
+                    if (video.currentSrc && (video.currentSrc.includes('audio') || video.currentSrc.includes('.aac') || 
+                        video.canPlayType('audio/mpeg') !== '' || video.canPlayType('audio/aac') !== '')) {
+                        console.log('视频URL暗示包含音频内容');
+                        return true;
+                    }
+                    
+                    // 方法4: 检查视频是否正在播放（有播放事件）
+                    if (video.currentTime > 0 && !video.paused) {
+                        return true;
+                    }
+                    
+                    return false;
+                }
+                
+                // 优化的音频恢复策略
+                function attemptAudioRecovery() {
+                    if (audioCheckCount >= maxAudioChecks || audioRestored) return;
+                    
+                    audioCheckCount++;
+                    console.log(`尝试音频恢复 (${audioCheckCount}/${maxAudioChecks})`);
+                    
+                    // 确保音频上下文已创建和恢复
+                    const ctx = ensureAudioContext();
+                    if (ctx && ctx.resume && ctx.state === 'suspended') {
+                        ctx.resume().catch(e => console.warn('恢复音频上下文失败:', e));
+                    }
+                    
+                    // 立即检查音频状态
+                    if (checkAudioStatus()) {
+                        audioRestored = true;
+                        showNotification('音频已恢复', 'success');
+                        clearInterval(audioCheckTimer);
+                        return;
+                    }
+                    
+                    // 尝试1: 快速音量重置（立即执行，不延迟）
+                    video.volume = 0;
+                    video.volume = 1;
+                    
+                    // 尝试1.5: 确保音频轨道被启用
+                    if (video.audioTracks && video.audioTracks.length > 0) {
+                        console.log(`音频恢复尝试 ${audioCheckCount}: 强制启用所有音频轨道`);
+                        for (let i = 0; i < video.audioTracks.length; i++) {
+                            video.audioTracks[i].enabled = true;
+                        }
+                    }
+                    
+                    // 尝试2: 刷新媒体元素属性
+                    video.muted = false; // 确保未静音
+                    video.crossOrigin = 'anonymous'; // 确保跨域设置正确
+                    
+                    // 尝试3: 暂停再播放（提前到第1次尝试）
+                    if (audioCheckCount >= 1) {
+                        video.pause();
+                        setTimeout(() => {
+                            video.play().catch(e => console.warn('恢复播放失败:', e));
+                        }, 200); // 减少延迟时间
+                    }
+                    
+                    // 尝试4: 使用Web Audio API创建静音振荡器（提高成功率）
+                    if (audioCheckCount >= 2 && ctx) {
+                        try {
+                            console.log(`音频恢复尝试 ${audioCheckCount}: 使用Web Audio API创建音频上下文`);
+                            const oscillator = ctx.createOscillator();
+                            const gainNode = ctx.createGain();
+                            
+                            // 创建静音信号，只用于激活音频通道
+                            gainNode.gain.value = 0;
+                            
+                            oscillator.connect(gainNode);
+                            gainNode.connect(ctx.destination);
+                            
+                            oscillator.start();
+                            oscillator.stop(ctx.currentTime + 0.1); // 播放极短时间的静音
+                        } catch (e) {
+                            console.warn('创建音频振荡器失败:', e);
+                        }
+                    }
+                    
+                    // 尝试5: 刷新播放源（第3次尝试）
+                    if (audioCheckCount >= 3 && !isUsingNativePlayback && hls) {
+                        console.log(`音频恢复尝试 ${audioCheckCount}: 尝试刷新播放源`);
+                        try {
+                            // 不重新加载整个页面，而是刷新当前媒体源
+                            const currentTime = video.currentTime;
+                            video.pause();
+                            video.currentTime = Math.max(0, currentTime - 1); // 略微回退
+                            
+                            setTimeout(() => {
+                                // 重新播放但保持在相同位置
+                                video.play().catch(error => {
+                                    console.warn('刷新播放源失败:', error);
+                                });
+                            }, 150);
+                        } catch (error) {
+                            console.error('刷新播放源失败:', error);
+                        }
+                    }
+                    
+                    // 尝试6: 强制重新加载媒体元数据
+                    if (audioCheckCount >= 4) {
+                        console.log(`音频恢复尝试 ${audioCheckCount}: 强制重新加载媒体元数据`);
+                        video.load();
+                        setTimeout(() => {
+                            video.play().catch(e => console.warn('重新加载后播放失败:', e));
+                        }, 300);
+                    }
+                    
+                    // 尝试7: 降级到原生播放（最后尝试）
+                    if (audioCheckCount === maxAudioChecks) {
+                        console.log('尝试降级到原生HLS播放以恢复音频...');
+                        showNotification('尝试恢复音频，切换到原生播放模式...', 'info');
+                        try {
+                            if (hls) {
+                                hls.destroy();
+                                isUsingNativePlayback = true; // 设置原生播放标志
+                            }
+                            // 修复原生播放错误：使用blob URL方式处理MIME类型问题
+                            const originalUrl = playUrl;
+                            // 先尝试直接设置src（适用于大多数情况）
+                            video.src = originalUrl;
+                            video.load();
+                            setTimeout(() => {
+                                video.play().catch(() => {
+                                    console.warn('原生播放初始尝试失败，尝试替代方案');
+                                    // 如果失败，尝试通过fetch获取内容后使用blob URL
+                                    fetch(originalUrl)
+                                        .then(response => response.blob())
+                                        .then(blob => {
+                                            const blobUrl = URL.createObjectURL(blob);
+                                            video.src = blobUrl;
+                                            video.load();
+                                            video.play().catch(e => console.error('原生播放替代方案失败:', e));
+                                        })
+                                        .catch(e => console.error('获取流内容失败:', e));
+                                });
+                            }, 500); // 减少延迟
+                        } catch (e) {
+                            console.error('降级到原生播放失败:', e);
+                        }
+                    }
+                }
+                
+                // 提前初始化音频 - 在视频元素准备好时就开始
+                video.addEventListener('loadedmetadata', () => {
+                    console.log('视频元数据加载完成，开始音频初始化');
+                    // 立即创建音频上下文
+                    ensureAudioContext();
+                    
+                    // 强制启用音频轨道
+                    if (video.audioTracks && video.audioTracks.length > 0) {
+                        console.log('强制启用音频轨道:', video.audioTracks.length);
+                        for (let i = 0; i < video.audioTracks.length; i++) {
+                            video.audioTracks[i].enabled = true;
+                        }
+                    }
+                    
+                    // 预先检查音频状态
+                    checkAudioStatus();
+                });
+                
+                // 视频播放时开始音频检测
+                video.addEventListener('playing', () => {
+                    // 清除任何可能存在的旧定时器
+                    clearInterval(audioCheckTimer);
+                    
+                    // 立即强制启用音频轨道
+                    if (video.audioTracks && video.audioTracks.length > 0) {
+                        console.log('播放开始时强制启用音频轨道:', video.audioTracks.length);
+                        for (let i = 0; i < video.audioTracks.length; i++) {
+                            video.audioTracks[i].enabled = true;
+                        }
+                    }
+                    
+                    // 初次检查音频状态
+                    if (!checkAudioStatus()) {
+                        // 没有检测到音频，设置定时检查和恢复
+                        audioCheckTimer = setInterval(() => {
+                            // 立即执行尝试恢复（不再等待额外的间隔）
+                            attemptAudioRecovery();
+                        }, 1500); // 进一步减少检查间隔
+                    } else {
+                        // 音频正常
+                        audioRestored = true;
+                    }
+                });
+                
+                // 视频结束或播放停止时清理定时器
+                video.addEventListener('ended', () => {
+                    clearInterval(audioCheckTimer);
+                });
+                
+                video.addEventListener('pause', () => {
+                    clearInterval(audioCheckTimer);
+                });
+                
+                hls.loadSource(playUrl);
+                hls.attachMedia(video);
+                
+                // 确保频道切换时重置原生播放状态
+                isUsingNativePlayback = false;
+                
+                // 添加恢复机制
+                            video.addEventListener('error', () => {
+                                console.error('视频元素错误:', video.error);
+                                // 尝试重新加载
+                                if (errorCount < currentConfig.maxRetries) {
+                                    errorCount++;
+                                    showNotification(`播放错误，尝试重新加载(${errorCount}/${currentConfig.maxRetries})...`, 'warning');
+                                    setTimeout(() => {
+                                        // 确保安全地销毁和重新初始化
+                                        try {
+                                            if (hls) {
+                                                hls.destroy();
+                                                hls = null;
+                                            }
+                                            // 完全重置视频元素
+                                            video.pause();
+                                            video.src = '';
+                                            video.load();
+                                            // 重新初始化播放器
+                                            initializePlayer();
+                                        } catch (e) {
+                                            console.error('重新初始化播放器失败:', e);
+                                        }
+                                    }, currentConfig.retryDelay * errorCount);
+                                }
+                            });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl') || true) { // 强制使用修复的原生播放逻辑
+                // 修复的原生HLS播放支持
+                console.log('使用修复的原生HLS播放支持');
+                isUsingNativePlayback = true; // 设置原生播放标志
+                
+                // 尝试直接设置src（适用于大多数情况）
+                video.src = playUrl;
+                
+                // 添加错误处理
+                const handleLoadError = () => {
+                    console.warn('直接加载失败，尝试使用blob URL方式');
+                    // 移除事件监听器以避免重复调用
+                    video.removeEventListener('error', handleLoadError);
+                    
+                    // 通过fetch获取内容后使用blob URL
+                    fetch(playUrl)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('网络响应错误');
+                            }
+                            return response.blob();
+                        })
+                        .then(blob => {
+                            const blobUrl = URL.createObjectURL(blob);
+                            console.log('使用blob URL播放:', blobUrl);
+                            video.src = blobUrl;
+                            video.load();
+                            setupPlayback();
+                        })
+                        .catch(e => {
+                            console.error('获取流内容失败:', e);
+                            showNotification('无法加载视频流，请检查网络连接', 'error');
+                        });
+                };
+                
+                // 原生播放的音频初始化函数
+                function initializeNativeAudioChannel() {
+                    console.log('初始化原生播放的音频通道...');
+                    // 确保音频上下文已创建
+                    ensureAudioContext();
+                    
+                    // 确保音频轨道启用
+                    if (video.audioTracks && video.audioTracks.length > 0) {
+                        for (let i = 0; i < video.audioTracks.length; i++) {
+                            video.audioTracks[i].enabled = true;
+                        }
+                    }
+                    
+                    // 立即尝试恢复音频上下文
+                    if (audioContext && audioContext.resume && audioContext.state === 'suspended') {
+                        audioContext.resume().catch(e => console.warn('无法恢复音频上下文:', e));
+                    }
+                }
+                
+                // 设置播放
+                const setupPlayback = () => {
+                    // 预先初始化音频通道
+                    initializeNativeAudioChannel();
+                    
+                    if (document.getElementById('autoPlay').checked) {
+                        setTimeout(() => {
+                            video.play().catch(error => {
+                                console.warn('原生播放自动播放失败:', error);
+                                
+                                // 特殊处理AbortError和被中止的错误
+                                if (error.name === 'AbortError' || error.message.includes('aborted by the user agent')) {
+                                    console.error('原生播放媒体资源获取被中止:', error);
+                                    showNotification('媒体加载被中止，正在尝试恢复...', 'warning');
+                                    
+                                    // 尝试恢复策略
+                                    setTimeout(() => {
+                                        try {
+                                            video.pause();
+                                            video.src = '';
+                                            video.load();
+                                            video.src = playUrl;
+                                            video.load();
+                                            setTimeout(() => {
+                                                video.play().catch(err => {
+                                                    console.warn('恢复播放再次失败:', err);
+                                                    showNotification('请点击播放按钮手动开始播放', 'info');
+                                                });
+                                            }, 300);
+                                        } catch (recoverError) {
+                                            console.error('原生播放恢复失败:', recoverError);
+                                            showNotification('请点击播放按钮手动开始播放', 'info');
+                                        }
+                                    }, 500);
+                                } else {
+                                    showNotification('自动播放失败，点击播放按钮或视频区域开始播放', 'info');
+                                }
+                            });
+                        }, 200); // 稍微延迟以确保元素完全准备好
+                    } else {
+                        // 设置播放按钮初始状态为播放图标
+                        const playPauseBtn = document.getElementById('playPauseBtn');
+                        if (playPauseBtn) {
+                            playPauseBtn.innerHTML = '▶️';
+                        }
+                    }
+                };
+                
+                // 添加错误监听器
+                video.addEventListener('error', handleLoadError);
+                
+                // 添加元数据加载成功监听器
+                video.addEventListener('loadedmetadata', () => {
+                    // 移除错误监听器，因为加载成功
+                    video.removeEventListener('error', handleLoadError);
+                    setupPlayback();
+                });
+                
+                // 确保加载
+                video.load();
+            } else {
+                showNotification('您的浏览器不支持HLS播放', 'error');
+            }
+        }
+
+        // 处理视频错误
+        function handleVideoError() {
+            console.error('视频播放错误:', video.error);
+            showNotification('视频播放错误，请尝试其他频道', 'error');
+        }
+
+        // 显示加载状态
+        function showLoading(show) {
+            if (show) {
+                elements.channelList.innerHTML = `
+                    <div class="loading">
+                        <div class="loader"></div>
+                        <span>加载中...</span>
+                    </div>
+                `;
+                elements.loadPlaylistBtn.disabled = true;
+                elements.loadPlaylistBtn.innerHTML = '<div class="loader" style="width: 16px; height: 16px; margin-right: 8px;"></div> 加载中...';
+            } else {
+                elements.loadPlaylistBtn.disabled = false;
+                elements.loadPlaylistBtn.textContent = '加载订阅';
+            }
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'info') {
+            const notification = elements.notification;
+            notification.textContent = message;
+            notification.className = 'notification';
+            
+            if (type === 'error') {
+                notification.classList.add('error');
+            } else if (type === 'success') {
+                notification.classList.add('success');
+            } else {
+                notification.classList.add('info');
+            }
+            
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // 显示模态框
+        function showModal(title, body, confirmCallback = null) {
+            elements.modalTitle.textContent = title;
+            elements.modalBody.innerHTML = body;
+            elements.modal.classList.add('show');
+            
+            // 存储确认回调
+            elements.modalConfirm.onclick = () => {
+                if (confirmCallback) {
+                    confirmCallback();
+                }
+                closeModal();
+            };
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            elements.modal.classList.remove('show');
+        }
+
+        // 添加订阅到列表
+        function addPlaylistToList(name, url) {
+            // 检查是否已存在
+            const existingIndex = storedPlaylists.findIndex(p => p.url === url);
+            
+            if (existingIndex === -1) {
+                storedPlaylists.push({ name, url });
+                saveStoredPlaylists();
+                renderPlaylistList();
+            }
+        }
+
+        // 添加新订阅
+        function addNewPlaylist() {
+            const name = elements.newPlaylistName.value.trim();
+            const url = elements.newPlaylistUrl.value.trim();
+            
+            if (!name || !url) {
+                showNotification('请填写订阅名称和地址', 'error');
+                return;
+            }
+            
+            addPlaylistToList(name, url);
+            
+            elements.newPlaylistName.value = '';
+            elements.newPlaylistUrl.value = '';
+            
+            showNotification('订阅添加成功', 'success');
+        }
+
+        // 渲染订阅列表
+        function renderPlaylistList() {
+            elements.playlistList.innerHTML = '';
+            
+            if (storedPlaylists.length === 0) {
+                elements.playlistList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📋</div>
+                        <div class="empty-title">暂无订阅源</div>
+                        <p>添加一个M3U订阅源开始使用</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            storedPlaylists.forEach((playlist, index) => {
+                const card = document.createElement('div');
+                card.className = 'playlist-card scale-in';
+                card.innerHTML = `
+                    <div class="playlist-info">
+                        <div class="playlist-name">${playlist.name}</div>
+                        <div class="playlist-url">${playlist.url}</div>
+                    </div>
+                    <div class="playlist-actions">
+                        <button class="btn btn-primary btn-icon" data-index="${index}" title="播放">▶</button>
+                        <button class="btn btn-secondary btn-icon" data-index="${index}" title="编辑">✎</button>
+                        <button class="btn btn-danger btn-icon" data-index="${index}" title="删除">✕</button>
+                    </div>
+                `;
+                
+                elements.playlistList.appendChild(card);
+                
+                // 添加按钮事件
+                card.querySelector('.btn-primary').addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+                    const pl = storedPlaylists[idx];
+                    elements.playlistUrl.value = pl.url;
+                    elements.playlistName.value = pl.name;
+                    switchSection('home');
+                    
+                    setTimeout(() => {
+                        // 检查是否为单频道播放列表
+                        if (pl.isSingleChannel && pl.channels && pl.channels.length > 0) {
+                            // 直接使用保存的频道数据，避免尝试解析单个频道URL
+                            currentPlaylist = {
+                                name: pl.name,
+                                url: pl.url,
+                                channels: pl.channels
+                            };
+                            allChannels = pl.channels;
+                            
+                            // 渲染频道列表
+                            renderChannelList();
+                            renderGroupTags();
+                            
+                            showNotification(`成功加载单频道: ${pl.name}`, 'success');
+                            
+                            // 自动选择并播放频道
+                            selectChannel(pl.channels[0]);
+                            playChannel(pl.channels[0]);
+                        } else {
+                            // 正常加载播放列表
+                            loadPlaylist();
+                        }
+                    }, 100);
+                });
+                
+                // 编辑按钮事件
+                card.querySelector('.btn-secondary').addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+                    const pl = storedPlaylists[idx];
+                    
+                    // 创建编辑表单
+                    const editForm = `
+                        <div class="form-group">
+                            <label for="editPlaylistName">订阅名称</label>
+                            <input type="text" id="editPlaylistName" class="form-control" value="${pl.name}">
+                        </div>
+                        <div class="form-group">
+                            <label for="editPlaylistUrl">订阅地址</label>
+                            <input type="text" id="editPlaylistUrl" class="form-control" value="${pl.url}">
+                        </div>
+                    `;
+                    
+                    showModal(
+                        '编辑订阅',
+                        editForm,
+                        () => {
+                            const newName = document.getElementById('editPlaylistName').value.trim();
+                            const newUrl = document.getElementById('editPlaylistUrl').value.trim();
+                            
+                            if (!newName || !newUrl) {
+                                showNotification('请填写订阅名称和地址', 'error');
+                                return;
+                            }
+                            
+                            // 更新订阅信息
+                            storedPlaylists[idx] = { name: newName, url: newUrl };
+                            saveStoredPlaylists();
+                            renderPlaylistList();
+                            showNotification('订阅已更新', 'success');
+                        }
+                    );
+                });
+                
+                card.querySelector('.btn-danger').addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+                    const pl = storedPlaylists[idx];
+                    
+                    showModal(
+                        '删除订阅',
+                        `确定要删除订阅 "${pl.name}" 吗？`,
+                        () => {
+                            storedPlaylists.splice(idx, 1);
+                            saveStoredPlaylists();
+                            renderPlaylistList();
+                            showNotification('订阅已删除', 'success');
+                        }
+                    );
+                });
+            });
+        }
+
+        // 保存订阅列表到本地存储
+        function saveStoredPlaylists() {
+            try {
+                localStorage.setItem('m3u8_playlists', JSON.stringify(storedPlaylists));
+            } catch (error) {
+                console.error('保存订阅列表失败:', error);
+            }
+        }
+
+        // 从本地存储加载订阅列表
+        function loadStoredPlaylists() {
+            try {
+                const stored = localStorage.getItem('m3u8_playlists');
+                if (stored) {
+                    storedPlaylists = JSON.parse(stored);
+                }
+            } catch (error) {
+                console.error('加载订阅列表失败:', error);
+                storedPlaylists = [];
+            }
+        }
+
+        // 保存设置
+        function saveSettings() {
+            const settings = {
+                // 强制保存正确的代理路径
+                proxyServer: '/api/v1/streamingProxy',
+                retryCount: parseInt(document.getElementById('retryCount').value),
+                theme: document.getElementById('themeSelect').value,
+                autoPlay: document.getElementById('autoPlay').checked,
+                rememberLastPlay: document.getElementById('rememberLastPlay').checked
+            };
+            
+            try {
+                localStorage.setItem('m3u8_settings', JSON.stringify(settings));
+                
+                // 更新配置 - 始终使用正确的代理路径
+                config.proxyUrl = '/api/v1/streamingProxy';
+                config.retryCount = settings.retryCount;
+                
+                // 确保UI显示正确的值
+                document.getElementById('proxyServer').value = '/api/v1/streamingProxy';
+                
+                showNotification('设置已保存', 'success');
+            } catch (error) {
+                console.error('保存设置失败:', error);
+                showNotification('保存设置失败', 'error');
+            }
+        }
+
+        // 加载设置
+        function loadSettings() {
+            try {
+                const stored = localStorage.getItem('m3u8_settings');
+                if (stored) {
+                    const settings = JSON.parse(stored);
+                    
+                    // 强制使用正确的代理路径
+                    document.getElementById('proxyServer').value = '/api/v1/streamingProxy';
+                    document.getElementById('retryCount').value = settings.retryCount || 3;
+                    document.getElementById('themeSelect').value = settings.theme || 'dark';
+                    document.getElementById('autoPlay').checked = settings.autoPlay !== false;
+                    document.getElementById('rememberLastPlay').checked = settings.rememberLastPlay || false;
+                    
+                    // 更新配置 - 始终使用正确的代理路径
+                    config.proxyUrl = '/api/v1/streamingProxy';
+                    config.retryCount = settings.retryCount || 3;
+                } else {
+                    // 如果没有存储的设置，确保使用正确的默认值
+                    document.getElementById('proxyServer').value = '/api/v1/streamingProxy';
+                    config.proxyUrl = '/api/v1/streamingProxy';
+                }
+            } catch (error) {
+                console.error('加载设置失败:', error);
+                // 出错时也使用正确的代理路径
+                document.getElementById('proxyServer').value = '/api/v1/streamingProxy';
+                config.proxyUrl = '/api/v1/streamingProxy';
+            }
+        }
+
+        // 重置设置
+        function resetSettings() {
+            showModal(
+                '重置设置',
+                '确定要将所有设置恢复为默认值吗？',
+                () => {
+                    localStorage.removeItem('m3u8_settings');
+                    loadSettings();
+                    showNotification('设置已重置', 'success');
+                }
+            );
+        }
+
+        // 应用初始化已在showPageContent函数中处理，不再需要此处的事件监听器
+        // 这样可以确保样式完全加载后再初始化应用，防止渲染闪烁
+    </script>
 </body>
 </html>
