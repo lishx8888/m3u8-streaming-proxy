@@ -1,20 +1,17 @@
-# Use the official Node.js image
-FROM node:16
-
-# Set the working directory
+FROM node:16-alpine AS deps
 WORKDIR /app
-
-# Copy package.json and package-lock.json
 COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
 
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the application code
-COPY . .
-
-# Expose the port
+FROM node:16-alpine
+ENV NODE_ENV=production
+RUN addgroup -g 1001 nodejs && adduser -u 1001 -G nodejs -S nodejs
+WORKDIR /app
+COPY --from=deps /app/package.json ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY ./src ./src
+COPY ./public ./public
+RUN chown -R nodejs:nodejs /app
+USER nodejs
 EXPOSE 3000
-
-# Start the application
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]
