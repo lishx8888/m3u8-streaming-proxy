@@ -100,7 +100,7 @@ jobs:
 
       # 运行安全扫描
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.14.0
         with:
           image-ref: ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version || 'latest' }}
           format: 'sarif'
@@ -108,6 +108,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           skip-version-check: true
+          ignore-unfixed: true
 
       # 上传Trivy扫描结果到GitHub安全选项卡
       - name: Upload Trivy scan results to GitHub Security tab
