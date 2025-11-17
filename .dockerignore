@@ -1,2 +1,54 @@
-node_modules
+# 依赖目录
+node_modules/
+
+# 环境变量文件
 .env
+.env.local
+.env.*.local
+
+# 日志文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 构建产物
+dist
+build
+builds
+
+# 测试目录和文件
+test
+coverage
+.nyc_output
+
+# 编辑器和IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 版本控制
+.git/
+.gitignore
+.github/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 其他
+*.log
+*.pem
+
+# 包管理器
+.npm
+.yarn-integrity
+
+# 特定于项目的文件
+.render.yaml
+vercel.json
+LICENSE
+README.md
