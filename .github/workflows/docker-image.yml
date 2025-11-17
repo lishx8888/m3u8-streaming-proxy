@@ -46,8 +46,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # 只使用GHCR镜像，简化配置
-          images: ghcr.io/${{ github.repository }}
+          # 同时配置GHCR和Docker Hub镜像
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/m3u8-streaming-proxy
           tags: |
             type=schedule
             type=ref,event=branch
