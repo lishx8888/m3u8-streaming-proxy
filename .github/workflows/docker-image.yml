@@ -100,7 +100,7 @@ jobs:
 
       # 运行安全扫描
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.14.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version || 'latest' }}
           format: 'sarif'
