@@ -1,0 +1,111 @@
+name: Docker Image Build and Publish
+
+on:
+  push:
+    branches: [ lishx ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ lishx ]
+  workflow_dispatch:
+    # 允许手动触发工作流
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      # 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 设置Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 登录到GitHub Container Registry (可选)
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 登录到Docker Hub (可选，如果需要推送镜像到Docker Hub)
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request' && secrets.DOCKER_HUB_USERNAME && secrets.DOCKER_HUB_TOKEN
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # 提取元数据 (标签、版本等)
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ secrets.DOCKER_HUB_USERNAME && format('{0}/m3u8-streaming-proxy', secrets.DOCKER_HUB_USERNAME) }}
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha
+
+      # 构建并推送Docker镜像
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 运行容器以测试镜像是否能正常启动 (可选)
+      - name: Test Docker image
+        if: github.event_name == 'pull_request'
+        run: |
+          docker run --rm -d -p 3000:3000 --name test-container ${{ steps.meta.outputs.tags }}
+          sleep 10  # 给容器时间启动
+          docker ps -a
+          docker logs test-container
+          # 尝试访问健康检查端点
+          curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || echo "Health check failed"
+          docker stop test-container
+
+  scan-image:
+    needs: build-and-push
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      # 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 提取元数据以获取镜像标签
+      - name: Extract metadata (tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha
+
+      # 使用Trivy扫描Docker镜像中的漏洞
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.tags }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      # 上传Trivy扫描结果到GitHub安全选项卡
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy-scan'
