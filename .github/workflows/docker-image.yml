@@ -107,6 +107,7 @@ jobs:
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
+          skip-version-check: true
 
       # 上传Trivy扫描结果到GitHub安全选项卡
       - name: Upload Trivy scan results to GitHub Security tab
